@@ -17,17 +17,7 @@ import {
   type ViewStyle,
 } from "react-native"
 import Footer from "../components/Footer"
-
-// Type definitions
-interface NewsItem {
-  id: string
-  title: string
-  isVerified: boolean
-  timestamp: string
-  location: string
-  imageUrl: string
-  readMoreUrl: string
-}
+import type { NewsItem } from "../types"
 
 interface Styles {
   container: ViewStyle
@@ -56,6 +46,8 @@ const NewsScreen: React.FC = () => {
     imageUrl:
       "https://dam.mediacorp.sg/image/upload/s--EDoeDMAN--/f_auto,q_auto/c_fill,g_auto,h_676,w_1200/v1/mediacorp/cna/image/2022/01/29/d0208994-1d43-4c31-9a6d-82df8333a9a3.jpg?itok=1w6lh1qI",
     readMoreUrl: "https://www.channelnewsasia.com/singapore/fire-scdf-telok-blangah-2467611",
+    category: "Emergency",
+    author: "SCDF",
   }
 
   const handleLinkPress = async (url: string): Promise<void> => {

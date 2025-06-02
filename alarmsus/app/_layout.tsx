@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack } from "expo-router"
 
 export default function RootLayout() {
   return (
@@ -7,5 +7,5 @@ export default function RootLayout() {
         headerShown: false, // Hide the header for all screens
       }}
     />
-  );
+  )
 }

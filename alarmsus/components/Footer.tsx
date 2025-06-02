@@ -4,9 +4,10 @@ import { Ionicons } from "@expo/vector-icons"
 import { usePathname, useRouter } from "expo-router"
 import type React from "react"
 import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from "react-native"
+import type { TabName } from "../types"
 
 interface FooterTab {
-  name: string
+  name: TabName
   path: string
   icon: keyof typeof Ionicons.glyphMap
   label: string

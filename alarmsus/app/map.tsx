@@ -1,31 +1,34 @@
-import { StyleSheet, Text, View } from 'react-native';
-import Footer from '../components/Footer';
+"use client"
+
+import { useState } from "react"
+import { SafeAreaView, StyleSheet, View } from "react-native"
+import CustomMap from "../components/CustomMap"
+import FilterPanel from "../components/FilterPanel"
+import Footer from "../components/Footer"
+import SearchBar from "../components/SearchBar"
 
 export default function MapScreen() {
+  const [showAEDs, setShowAEDs] = useState<boolean>(true)
+
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Map Screen</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.mapContainer}>
+        <CustomMap showAEDs={showAEDs} />
+        <SearchBar />
+        <FilterPanel showAEDs={showAEDs} setShowAEDs={setShowAEDs} />
       </View>
       <Footer />
-    </View>
-  );
+    </SafeAreaView>
+  )
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, 
-    backgroundColor: '#ffffff',
+    flex: 1,
+    backgroundColor: "#fff",
   },
-  content: {
-    flex: 1, 
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
+  mapContainer: {
+    flex: 1,
+    position: "relative",
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-});
+})

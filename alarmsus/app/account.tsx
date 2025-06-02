@@ -1,6 +1,5 @@
-// app/account.tsx
-import { StyleSheet, Text, View } from 'react-native';
-import Footer from '../components/Footer';
+import { StyleSheet, Text, View } from "react-native"
+import Footer from "../components/Footer"
 
 export default function AccountScreen() {
   return (
@@ -10,11 +9,11 @@ export default function AccountScreen() {
       </View>
       <Footer />
     </View>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: 'bold' },
-});
+  container: { flex: 1, backgroundColor: "#ffffff" },
+  content: { flex: 1, justifyContent: "center", alignItems: "center" },
+  title: { fontSize: 24, fontWeight: "bold" },
+})

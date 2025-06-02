@@ -5,18 +5,18 @@ import { useLocalSearchParams, useRouter } from "expo-router"
 import type React from "react"
 import { useEffect, useState } from "react"
 import {
-    Alert,
-    Image,
-    Keyboard,
-    Modal,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Alert,
+  Image,
+  Keyboard,
+  Modal,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native"
 import Footer from "../components/Footer"
 
@@ -130,8 +130,7 @@ const ForumScreen: React.FC = () => {
       timestamp: "26 minutes ago",
       location: "",
       distance: "500m away from you",
-      imageUrl:
-        "https://i.i-sgcm.com/news/article_news/2020/23101_p1_s_5.jpg",
+      imageUrl: "https://i.i-sgcm.com/news/article_news/2020/23101_p1_s_5.jpg",
       alertCount: 15,
       commentCount: 4,
       shareCount: 4,
