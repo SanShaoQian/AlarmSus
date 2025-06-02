@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "alarmsus",
-    "slug": "alarmsus",
+    "name": "alarmsus_app_v2",
+    "slug": "alarmsus_app_v2",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "alarmsus",
+    "scheme": "alarmsusappv2",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
