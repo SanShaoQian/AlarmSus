@@ -17,7 +17,17 @@ import {
   type ViewStyle,
 } from "react-native"
 import Footer from "../components/Footer"
-import type { NewsItem } from "../types"
+
+// Type definitions
+interface NewsItem {
+  id: string
+  title: string
+  isVerified: boolean
+  timestamp: string
+  location: string
+  imageUrl: string
+  readMoreUrl: string
+}
 
 interface Styles {
   container: ViewStyle
@@ -37,8 +47,12 @@ const NewsScreen: React.FC = () => {
   const router = useRouter()
 
   // Sample news data - in a real app this would come from props or state
+  // TODO: When backend is implemented, ensure each news item has:
+  // - Unique ID that maps to corresponding forum post
+  // - Forum post ID for direct navigation
+  // - Proper data synchronization between news and forum content
   const newsData: NewsItem = {
-    id: "1",
+    id: "1", // This ID should map to a specific forum post when backend is ready
     title: "Fire in Kranji",
     isVerified: true,
     timestamp: "1 hour ago",
@@ -46,8 +60,6 @@ const NewsScreen: React.FC = () => {
     imageUrl:
       "https://dam.mediacorp.sg/image/upload/s--EDoeDMAN--/f_auto,q_auto/c_fill,g_auto,h_676,w_1200/v1/mediacorp/cna/image/2022/01/29/d0208994-1d43-4c31-9a6d-82df8333a9a3.jpg?itok=1w6lh1qI",
     readMoreUrl: "https://www.channelnewsasia.com/singapore/fire-scdf-telok-blangah-2467611",
-    category: "Emergency",
-    author: "SCDF",
   }
 
   const handleLinkPress = async (url: string): Promise<void> => {
@@ -64,10 +76,21 @@ const NewsScreen: React.FC = () => {
   }
 
   const navigateToForum = () => {
-    // Navigate to forum with the specific post ID
+    // TODO: When backend is implemented, this should:
+    // 1. Fetch the corresponding forum post ID for this news item
+    // 2. Pass the forum post ID instead of the news item ID
+    // 3. The forum page should automatically open and scroll to the specific post
+
+    // Navigate to forum with the specific news item ID
+    // Currently using news item ID directly - this will need backend mapping
     router.push({
       pathname: "/forum",
-      params: { id: "1" },
+      params: {
+        id: newsData.id,
+        // TODO: Add additional params when backend is ready:
+        // forumPostId: mappedForumPostId,
+        // autoOpen: true
+      },
     })
   }
 
@@ -76,7 +99,13 @@ const NewsScreen: React.FC = () => {
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* News Card */}
+        {/* News Card - Clickable block that navigates to forum */}
+        {/* TODO: When backend is implemented, add:
+            - Loading state while navigating
+            - Error handling for failed navigation
+            - Analytics tracking for news-to-forum navigation
+            - Deep linking support for specific forum posts
+        */}
         <TouchableOpacity style={styles.newsCard} onPress={navigateToForum} activeOpacity={0.9}>
           {/* Header with title, verified icon, and timestamp */}
           <View style={styles.cardHeader}>
