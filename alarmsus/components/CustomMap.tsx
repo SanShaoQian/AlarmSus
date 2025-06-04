@@ -1,9 +1,12 @@
 "use client"
 
 import * as Location from "expo-location"
-import { useEffect, useState } from "react"
+import { Suspense, lazy, useEffect, useState } from "react"
 import { Alert, Dimensions, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native"
-import { fetchAEDs } from "../services/onemap"
+import { fetchNearbyAEDs } from "../services/aedcsv"
+
+const MapView = lazy(() => import('react-native-maps'))
+const Marker = lazy(() => import('react-native-maps').then(mod => ({ default: mod.Marker })))
 
 const { width, height } = Dimensions.get("window")
 
@@ -11,20 +14,10 @@ type Props = {
   showAEDs: boolean
 }
 
-function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const toRad = (x: number) => (x * Math.PI) / 180
-  const R = 6371e3 // in meters
-
-  const dLat = toRad(lat2 - lat1)
-  const dLon = toRad(lon2 - lon1)
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
-
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) // in meters
-}
-
 export default function CustomMap({ showAEDs }: Props) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null)
   const [nearbyAeds, setNearbyAeds] = useState<any[]>([])
+  const [searchRadius, setSearchRadius] = useState(500)
 
   useEffect(() => {
     ;(async () => {
@@ -39,7 +32,6 @@ export default function CustomMap({ showAEDs }: Props) {
         setLocation(loc)
       } catch (error) {
         console.log("Location error:", error)
-        // Set a default location for demo purposes
         setLocation({
           coords: {
             latitude: 1.3521,
@@ -58,61 +50,91 @@ export default function CustomMap({ showAEDs }: Props) {
 
   useEffect(() => {
     if (showAEDs && location) {
-      fetchAEDs().then((allAeds) => {
-        const nearby = allAeds.filter((aed: any) => {
-          const lat = Number.parseFloat(aed.LATITUDE)
-          const lon = Number.parseFloat(aed.LONGITUDE)
-          if (isNaN(lat) || isNaN(lon)) return false
-          return haversineDistance(lat, lon, location.coords.latitude, location.coords.longitude) < 500 // 500m
-        })
-        setNearbyAeds(nearby)
-      })
+      fetchNearbyAEDs(
+        location.coords.latitude,
+        location.coords.longitude,
+        searchRadius
+      ).then((aeds) => setNearbyAeds(aeds))
     } else {
       setNearbyAeds([])
     }
-  }, [showAEDs, location])
+  }, [showAEDs, location, searchRadius])
 
   const openInGoogleMaps = (latitude: number, longitude: number) => {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
     Linking.openURL(url)
   }
 
+  const adjustSearchRadius = (increase: boolean) => {
+    setSearchRadius(prev => {
+      const newRadius = increase ? prev + 500 : Math.max(500, prev - 500)
+      return newRadius
+    })
+  }
+
+  if (!location) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Loading map...</Text>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.container}>
-      <View style={styles.mapPlaceholder}>
-        <Text style={styles.mapTitle}>Interactive Map</Text>
-        {location && (
-          <Text style={styles.locationText}>
-            Current Location: {location.coords.latitude.toFixed(4)}, {location.coords.longitude.toFixed(4)}
-          </Text>
-        )}
+      <Suspense fallback={<View style={styles.loadingContainer}><Text>Loading map...</Text></View>}>
+        <MapView
+          style={styles.map}
+          initialRegion={{
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }}
+          showsUserLocation
+        >
+          {showAEDs && nearbyAeds.map((aed, index) => (
+            <Marker
+              key={index}
+              coordinate={{
+                latitude: parseFloat(aed.LATITUDE),
+                longitude: parseFloat(aed.LONGITUDE),
+              }}
+              title={aed.DESCRIPTION || 'AED'}
+              description={aed.ADDRESS || 'No address info'}
+              onCalloutPress={() => openInGoogleMaps(parseFloat(aed.LATITUDE), parseFloat(aed.LONGITUDE))}
+            />
+          ))}
+        </MapView>
+      </Suspense>
 
-        <Text style={styles.mapNote}>Map will display here in native app</Text>
-
-        {showAEDs && nearbyAeds.length > 0 && (
-          <View style={styles.aedList}>
-            <Text style={styles.aedTitle}>Nearby AEDs ({nearbyAeds.length})</Text>
-            {nearbyAeds.slice(0, 3).map((aed, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.aedItem}
-                onPress={() => {
-                  const lat = Number.parseFloat(aed.LATITUDE)
-                  const lon = Number.parseFloat(aed.LONGITUDE)
-                  openInGoogleMaps(lat, lon)
-                }}
+      {showAEDs && (
+        <View style={styles.controlsOverlay}>
+          <View style={styles.controlsContainer}>
+            <Text style={styles.radiusText}>Search Radius: {searchRadius}m</Text>
+            <View style={styles.radiusControls}>
+              <TouchableOpacity 
+                style={styles.radiusButton} 
+                onPress={() => adjustSearchRadius(false)}
               >
-                <Text style={styles.aedName}>{aed.DESCRIPTION || "AED"}</Text>
-                <Text style={styles.aedAddress}>{aed.ADDRESS || "No address info"}</Text>
+                <Text style={styles.radiusButtonText}>-</Text>
               </TouchableOpacity>
-            ))}
+              <TouchableOpacity 
+                style={styles.radiusButton} 
+                onPress={() => adjustSearchRadius(true)}
+              >
+                <Text style={styles.radiusButtonText}>+</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        )}
 
-        {showAEDs && nearbyAeds.length === 0 && location && (
-          <Text style={styles.noAedsText}>No AEDs found within 500m</Text>
-        )}
-      </View>
+          {nearbyAeds.length > 0 ? (
+            <Text style={styles.aedCountText}>Found {nearbyAeds.length} AEDs nearby</Text>
+          ) : (
+            <Text style={styles.aedCountText}>No AEDs found within {searchRadius}m</Text>
+          )}
+        </View>
+      )}
     </View>
   )
 }
@@ -120,68 +142,65 @@ export default function CustomMap({ showAEDs }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'relative',
   },
-  mapPlaceholder: {
+  loadingContainer: {
     flex: 1,
-    backgroundColor: "#f0f0f0",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
   },
-  mapTitle: {
+  map: {
+    width: '100%',
+    height: '100%',
+  },
+  controlsOverlay: {
+    position: "absolute",
+    top: 20,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  controlsContainer: {
+    backgroundColor: "white",
+    padding: 10,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    alignItems: "center",
+  },
+  radiusText: {
+    fontSize: 16,
+    color: "#333",
+    marginBottom: 8,
+  },
+  radiusControls: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 20,
+  },
+  radiusButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: "#2196F3",
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  radiusButtonText: {
+    color: "#fff",
     fontSize: 24,
     fontWeight: "bold",
-    color: "#333",
-    marginBottom: 10,
   },
-  locationText: {
+  aedCountText: {
+    marginTop: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    padding: 8,
+    borderRadius: 4,
     fontSize: 14,
-    color: "#666",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  mapNote: {
-    fontSize: 16,
-    color: "#888",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  aedList: {
-    width: "100%",
-    maxWidth: 300,
-  },
-  aedTitle: {
-    fontSize: 18,
-    fontWeight: "600",
     color: "#333",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  aedItem: {
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  aedName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 4,
-  },
-  aedAddress: {
-    fontSize: 14,
-    color: "#666",
-  },
-  noAedsText: {
-    fontSize: 16,
-    color: "#888",
-    textAlign: "center",
-    marginTop: 20,
   },
 })
