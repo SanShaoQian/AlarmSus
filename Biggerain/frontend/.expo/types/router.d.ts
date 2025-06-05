@@ -1,0 +1,14 @@
+/* eslint-disable */
+import * as Router from 'expo-router';
+
+export * from 'expo-router';
+
+declare module 'expo-router' {
+  export namespace ExpoRouter {
+    export interface __routes<T extends string | object = string> {
+      hrefInputParams: { pathname: Router.RelativePathString, params?: Router.UnknownInputParams } | { pathname: Router.ExternalPathString, params?: Router.UnknownInputParams } | { pathname: `/account`; params?: Router.UnknownInputParams; } | { pathname: `/forum`; params?: Router.UnknownInputParams; } | { pathname: `/`; params?: Router.UnknownInputParams; } | { pathname: `/map`; params?: Router.UnknownInputParams; } | { pathname: `/news`; params?: Router.UnknownInputParams; } | { pathname: `/page`; params?: Router.UnknownInputParams; } | { pathname: `/Report`; params?: Router.UnknownInputParams; } | { pathname: `/_sitemap`; params?: Router.UnknownInputParams; } | { pathname: `/account/page`; params?: Router.UnknownInputParams; };
+      hrefOutputParams: { pathname: Router.RelativePathString, params?: Router.UnknownOutputParams } | { pathname: Router.ExternalPathString, params?: Router.UnknownOutputParams } | { pathname: `/account`; params?: Router.UnknownOutputParams; } | { pathname: `/forum`; params?: Router.UnknownOutputParams; } | { pathname: `/`; params?: Router.UnknownOutputParams; } | { pathname: `/map`; params?: Router.UnknownOutputParams; } | { pathname: `/news`; params?: Router.UnknownOutputParams; } | { pathname: `/page`; params?: Router.UnknownOutputParams; } | { pathname: `/Report`; params?: Router.UnknownOutputParams; } | { pathname: `/_sitemap`; params?: Router.UnknownOutputParams; } | { pathname: `/account/page`; params?: Router.UnknownOutputParams; };
+      href: Router.RelativePathString | Router.ExternalPathString | `/account${`?${string}` | `#${string}` | ''}` | `/forum${`?${string}` | `#${string}` | ''}` | `/${`?${string}` | `#${string}` | ''}` | `/map${`?${string}` | `#${string}` | ''}` | `/news${`?${string}` | `#${string}` | ''}` | `/page${`?${string}` | `#${string}` | ''}` | `/Report${`?${string}` | `#${string}` | ''}` | `/_sitemap${`?${string}` | `#${string}` | ''}` | `/account/page${`?${string}` | `#${string}` | ''}` | { pathname: Router.RelativePathString, params?: Router.UnknownInputParams } | { pathname: Router.ExternalPathString, params?: Router.UnknownInputParams } | { pathname: `/account`; params?: Router.UnknownInputParams; } | { pathname: `/forum`; params?: Router.UnknownInputParams; } | { pathname: `/`; params?: Router.UnknownInputParams; } | { pathname: `/map`; params?: Router.UnknownInputParams; } | { pathname: `/news`; params?: Router.UnknownInputParams; } | { pathname: `/page`; params?: Router.UnknownInputParams; } | { pathname: `/Report`; params?: Router.UnknownInputParams; } | { pathname: `/_sitemap`; params?: Router.UnknownInputParams; } | { pathname: `/account/page`; params?: Router.UnknownInputParams; };
+    }
+  }
+}
