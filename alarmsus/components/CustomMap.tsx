@@ -3,7 +3,7 @@
 import * as Location from "expo-location"
 import { Suspense, lazy, useEffect, useState } from "react"
 import { Alert, Dimensions, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native"
-import { fetchNearbyAEDs } from "../services/aedcsv"
+import { fetchNearbyAEDs } from "../services/aed/bin/aedcsv"
 
 const MapView = lazy(() => import('react-native-maps'))
 const Marker = lazy(() => import('react-native-maps').then(mod => ({ default: mod.Marker })))

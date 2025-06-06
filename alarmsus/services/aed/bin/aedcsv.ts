@@ -1,6 +1,6 @@
 import { parse } from 'papaparse';
 import { getDistance } from 'geolib';
-import { geocodePostalCode } from './onemap';
+import { geocodePostalCode } from '../../onemap';
 
 interface AEDEntry {
   postalCode: string;
