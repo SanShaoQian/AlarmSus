@@ -1,6 +1,7 @@
-import express from 'express';
+import express, { Request, Response, RequestHandler } from 'express';
 import cors from 'cors';
 import { Pool } from 'pg';
+import { Query } from 'express-serve-static-core';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -17,20 +18,29 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 
+interface TypedRequestQuery extends Request {
+    query: {
+        latitude?: string;
+        longitude?: string;
+        radius?: string;
+    }
+}
+
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
 
 // Fetch nearby AEDs endpoint
-app.get('/api/aeds/nearby', async (req, res) => {
+const getNearbyAEDs: RequestHandler = async (req, res) => {
     try {
         const { latitude, longitude, radius } = req.query;
         
         if (!latitude || !longitude || !radius) {
-            return res.status(400).json({ 
+            res.status(400).json({ 
                 error: 'Missing required parameters: latitude, longitude, radius' 
             });
+            return;
         }
 
         const radiusKm = Number(radius) / 1000; // Convert meters to kilometers
@@ -45,7 +55,9 @@ app.get('/api/aeds/nearby', async (req, res) => {
         console.error('Error fetching nearby AEDs:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
-});
+};
+
+app.get('/api/aeds/nearby', getNearbyAEDs);
 
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
