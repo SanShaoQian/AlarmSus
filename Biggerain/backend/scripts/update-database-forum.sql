@@ -155,8 +155,7 @@ async function setupDatabase() {
     console.error("\n❌ Database setup failed:")
     console.error(error)
     process.exit(1)
-  } 
-  finally {
+  } finally {
     await pool.end()
     console.log("\n🔌 Database connection closed")
   }

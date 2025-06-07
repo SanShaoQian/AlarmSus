@@ -13,13 +13,5 @@
     "setup": "npm run install:all && npm run setup:db",
     "setup:db": "cd backend && npm run setup:db"
   },
-  "workspaces": [
-    "backend",
-    "frontend"
-  ],
-  "dependencies": {
-    "papaparse": "^5.5.3",
-    "react-dom": "18.2.0",
-    "react-native-web": "~0.19.10"
-  }
+  "workspaces": ["backend", "frontend"]
 }

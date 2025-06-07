@@ -3,7 +3,7 @@
 import { Ionicons } from "@expo/vector-icons"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import {
   Alert,
   Image,
@@ -17,8 +17,12 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native"
 import Footer from "../components/Footer"
+import type { ForumIncident, ForumFilters } from "../types/forum"
+import { fetchForumIncidents, incrementMapViews, incrementAlerts } from "../services/forumService"
 
 // Types
 interface Comment {
@@ -69,75 +73,73 @@ const ForumScreen: React.FC = () => {
   const [showShareModal, setShowShareModal] = useState<boolean>(false)
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyText, setReplyText] = useState<string>("")
+  const [loading, setLoading] = useState<boolean>(true)
+  const [refreshing, setRefreshing] = useState<boolean>(false)
+  const [filters, setFilters] = useState<ForumFilters>({
+    type: undefined,
+    verified: undefined,
+    sort: "latest",
+    search: "",
+  })
 
-  // Sample news data
-  const [newsItems, setNewsItems] = useState<NewsItem[]>([
-    {
-      id: "1",
-      title: "Fire in Kranji",
-      isVerified: true,
-      timestamp: "1 hour ago",
-      location: "A fire at Block 39, Telok Blangah Rise",
-      distance: "200m away from you",
-      imageUrl:
-        "https://dam.mediacorp.sg/image/upload/s--EDoeDMAN--/f_auto,q_auto/c_fill,g_auto,h_676,w_1200/v1/mediacorp/cna/image/2022/01/29/d0208994-1d43-4c31-9a6d-82df8333a9a3.jpg?itok=1w6lh1qI",
-      alertCount: 21,
-      commentCount: 18,
-      shareCount: 26,
-      userAlerted: false,
-      comments: [
-        {
-          id: "1",
-          username: "commenter1",
-          text: "comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment...",
-          thumbsUp: 20,
-          thumbsDown: 5,
-          replies: [
-            { id: "1-1", username: "user1", text: "Reply to comment 1" },
-            { id: "1-2", username: "user2", text: "Another reply to comment 1" },
-          ],
-          showReplies: false,
-        },
-        {
-          id: "2",
-          username: "commenter2",
-          text: "comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment...",
-          thumbsUp: 15,
-          thumbsDown: 3,
-          replies: [{ id: "2-1", username: "user3", text: "Reply to comment 2" }],
-          showReplies: false,
-        },
-      ],
-    },
-    {
-      id: "2",
-      title: "Someone collapsed!",
-      isVerified: false,
-      timestamp: "58 minutes ago",
-      location: "",
-      distance: "100m away from you",
-      imageUrl: "",
-      alertCount: 11,
-      commentCount: 5,
-      shareCount: 9,
-      userAlerted: false,
-      comments: [],
-    },
-    {
-      id: "3",
-      title: "Car crash",
-      isVerified: false,
-      timestamp: "26 minutes ago",
-      location: "",
-      distance: "500m away from you",
-      imageUrl: "https://i.i-sgcm.com/news/article_news/2020/23101_p1_s_5.jpg",
-      alertCount: 15,
-      commentCount: 4,
-      shareCount: 4,
-      userAlerted: false,
-      comments: [],
-    },
-  ])
+  // Backend data
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([])
+
+  // Load incidents from backend
+  const loadIncidents = useCallback(async () => {
+    try {
+      setLoading(true)
+      const currentFilters = {
+        ...filters,
+        search: searchQuery,
+      }
+
+      const response = await fetchForumIncidents(currentFilters)
+
+      if (response.success) {
+        // Convert backend data to frontend format
+        const convertedItems: NewsItem[] = response.data.incidents.map((incident: ForumIncident) => ({
+          id: incident.id.toString(),
+          title: incident.title,
+          isVerified: incident.verified,
+          timestamp: incident.timeAgo || "Unknown",
+          location: incident.location,
+          distance: "", // You can calculate this if you have user location
+          imageUrl: incident.imageUrl || "",
+          alertCount: incident.alerts,
+          commentCount: incident.comments,
+          shareCount: incident.mapViews, // Using mapViews as shareCount for now
+          userAlerted: false,
+          comments: [], // Comments will be loaded separately if needed
+        }))
+
+        setNewsItems(convertedItems)
+      } else {
+        console.error("Error loading incidents:", response.message)
+      }
+    } catch (error) {
+      console.error("Error loading incidents:", error)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [filters, searchQuery])
+
+  useEffect(() => {
+    loadIncidents()
+  }, [loadIncidents])
+
+  useEffect(() => {
+    if (searchQuery) {
+      // Debounce search
+      const timeoutId = setTimeout(() => {
+        setFilters((prev) => ({ ...prev, search: searchQuery }))
+      }, 500)
+      return () => clearTimeout(timeoutId)
+    } else {
+      setFilters((prev) => ({ ...prev, search: "" }))
+    }
+  }, [searchQuery])
 
   useEffect(() => {
     if (postId) {
@@ -146,15 +148,15 @@ const ForumScreen: React.FC = () => {
   }, [postId])
 
   // Add this useEffect to ensure comments are properly displayed
-  useEffect(() => {
-    if (selectedPost) {
-      const post = newsItems.find((item) => item.id === selectedPost)
-      if (post && post.comments) {
-        // This will trigger a re-render of the comments section
-        const sortedComments = [...post.comments].sort((a, b) => b.thumbsUp - a.thumbsUp)
-      }
-    }
-  }, [newsItems, selectedPost])
+  // useEffect(() => {
+  //   if (selectedPost) {
+  //     const post = newsItems.find((item) => item.id === selectedPost)
+  //     if (post && post.comments) {
+  //       // This will trigger a re-render of the comments section
+  //       const sortedComments = [...post.comments].sort((a, b) => b.thumbsUp - a.thumbsUp)
+  //     }
+  //   }
+  // }, [newsItems, selectedPost])
 
   // Handlers
   const handlePostPress = (id: string) => {
@@ -172,7 +174,7 @@ const ForumScreen: React.FC = () => {
 
   const handleSubmitReply = () => {
     if (replyText.trim() && replyingTo && selectedPost) {
-      // TODO: Add backend integration to add reply
+      // Add reply to local state
       setNewsItems(
         newsItems.map((item) => {
           if (item.id === selectedPost && item.comments) {
@@ -208,20 +210,28 @@ const ForumScreen: React.FC = () => {
     }
   }
 
-  const handleAlert = (id: string) => {
-    // TODO: Add backend integration to update alert count
-    setNewsItems(
-      newsItems.map((item) => {
-        if (item.id === id && !item.userAlerted) {
-          return {
-            ...item,
-            alertCount: item.alertCount + 1,
-            userAlerted: true,
+  const handleAlert = async (id: string) => {
+    try {
+      const numericId = Number.parseInt(id)
+      await incrementAlerts(numericId)
+
+      // Update local state
+      setNewsItems(
+        newsItems.map((item) => {
+          if (item.id === id && !item.userAlerted) {
+            return {
+              ...item,
+              alertCount: item.alertCount + 1,
+              userAlerted: true,
+            }
           }
-        }
-        return item
-      }),
-    )
+          return item
+        }),
+      )
+    } catch (error) {
+      console.error("Error incrementing alerts:", error)
+      Alert.alert("Error", "Failed to update alert count")
+    }
   }
 
   const handleCommentPress = (id: string) => {
@@ -233,9 +243,31 @@ const ForumScreen: React.FC = () => {
     }
   }
 
-  const handleMapPress = (id: string) => {
-    // TODO: Add backend integration to get location data
-    router.push("/map")
+  const handleMapPress = async (id: string) => {
+    try {
+      const numericId = Number.parseInt(id)
+      await incrementMapViews(numericId)
+
+      // Update local state
+      setNewsItems(
+        newsItems.map((item) => {
+          if (item.id === id) {
+            return {
+              ...item,
+              shareCount: item.shareCount + 1,
+            }
+          }
+          return item
+        }),
+      )
+
+      // Navigate to map
+      router.push("/map")
+    } catch (error) {
+      console.error("Error incrementing map views:", error)
+      // Still navigate to map even if increment fails
+      router.push("/map")
+    }
   }
 
   const handleSharePress = (id: string) => {
@@ -404,6 +436,21 @@ const ForumScreen: React.FC = () => {
     }, 3000)
   }
 
+  const handleRefresh = () => {
+    setRefreshing(true)
+    loadIncidents()
+  }
+
+  const handleFilterPress = () => {
+    // You can implement filter modal here
+    Alert.alert("Filter", "Filter functionality will be implemented soon")
+  }
+
+  const handleSortPress = () => {
+    // You can implement sort options here
+    Alert.alert("Sort", "Sort functionality will be implemented soon")
+  }
+
   // Get the selected post data
   const selectedPostData = selectedPost ? newsItems.find((item) => item.id === selectedPost) : null
 
@@ -411,6 +458,15 @@ const ForumScreen: React.FC = () => {
   const sortedComments = selectedPostData?.comments
     ? [...selectedPostData.comments].sort((a, b) => b.thumbsUp - a.thumbsUp)
     : []
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading incidents...</Text>
+      </View>
+    )
+  }
 
   return (
     <View style={styles.container}>
@@ -424,7 +480,11 @@ const ForumScreen: React.FC = () => {
         }}
       >
         <View style={{ flex: 1 }}>
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+          >
             {!selectedPost ? (
               <>
                 {/* Search Bar */}
@@ -441,68 +501,80 @@ const ForumScreen: React.FC = () => {
 
                 {/* Filter and Sort */}
                 <View style={styles.filterSortContainer}>
-                  <TouchableOpacity style={styles.filterButton}>
+                  <TouchableOpacity style={styles.filterButton} onPress={handleFilterPress}>
                     <Ionicons name="funnel-outline" size={18} color="#333" />
                     <Text style={styles.filterSortText}>filter</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.sortButton}>
+                  <TouchableOpacity style={styles.sortButton} onPress={handleSortPress}>
                     <Ionicons name="swap-vertical-outline" size={18} color="#333" />
                     <Text style={styles.filterSortText}>sort</Text>
                   </TouchableOpacity>
                 </View>
 
                 {/* News Items List */}
-                {newsItems.map((item) => (
-                  <View key={item.id} style={styles.newsItemCard}>
-                    <TouchableOpacity activeOpacity={0.9} onPress={() => handlePostPress(item.id)}>
-                      <View style={styles.cardHeader}>
-                        <Text style={styles.cardTitle}>{item.title}</Text>
-                        <View style={styles.timestampContainer}>
-                          <Text style={styles.timestamp}>{item.timestamp}</Text>
-                          {item.isVerified ? (
-                            <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" />
-                          ) : (
-                            <Text style={styles.unverifiedText}>unverified</Text>
-                          )}
-                        </View>
-                      </View>
-
-                      <Text style={styles.distanceText}>{item.distance}</Text>
-
-                      {item.imageUrl ? (
-                        <Image source={{ uri: item.imageUrl }} style={styles.newsImage} resizeMode="cover" />
-                      ) : null}
-
-                      <View style={styles.actionButtons}>
-                        <TouchableOpacity
-                          style={[styles.actionButton, item.userAlerted && styles.alertedButton]}
-                          onPress={() => handleAlert(item.id)}
-                        >
-                          <Ionicons name="warning-outline" size={18} color={item.userAlerted ? "#FFFFFF" : "#000000"} />
-                          <Text style={[styles.actionText, item.userAlerted && styles.alertedText]}>
-                            {item.alertCount} alerted
-                          </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.actionButton} onPress={() => handleCommentPress(item.id)}>
-                          <Ionicons name="chatbubble-outline" size={18} color="#000000" />
-                          <Text style={styles.actionText}>{item.commentCount} comments</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.actionButton} onPress={() => handleMapPress(item.id)}>
-                          <Ionicons name="location-outline" size={18} color="#000000" />
-                          <Text style={styles.actionText}>Map</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.actionButton} onPress={() => handleSharePress(item.id)}>
-                          <Ionicons name="share-social-outline" size={18} color="#000000" />
-                          <Text style={styles.actionText}>{item.shareCount}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </TouchableOpacity>
+                {newsItems.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <Ionicons name="document-text-outline" size={64} color="#CCC" />
+                    <Text style={styles.emptyText}>No incidents found</Text>
+                    <Text style={styles.emptySubtext}>Try adjusting your search</Text>
                   </View>
-                ))}
+                ) : (
+                  newsItems.map((item) => (
+                    <View key={item.id} style={styles.newsItemCard}>
+                      <TouchableOpacity activeOpacity={0.9} onPress={() => handlePostPress(item.id)}>
+                        <View style={styles.cardHeader}>
+                          <Text style={styles.cardTitle}>{item.title}</Text>
+                          <View style={styles.timestampContainer}>
+                            <Text style={styles.timestamp}>{item.timestamp}</Text>
+                            {item.isVerified ? (
+                              <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" />
+                            ) : (
+                              <Text style={styles.unverifiedText}>unverified</Text>
+                            )}
+                          </View>
+                        </View>
+
+                        {item.location && <Text style={styles.distanceText}>{item.location}</Text>}
+
+                        {item.imageUrl ? (
+                          <Image source={{ uri: item.imageUrl }} style={styles.newsImage} resizeMode="cover" />
+                        ) : null}
+
+                        <View style={styles.actionButtons}>
+                          <TouchableOpacity
+                            style={[styles.actionButton, item.userAlerted && styles.alertedButton]}
+                            onPress={() => handleAlert(item.id)}
+                          >
+                            <Ionicons
+                              name="warning-outline"
+                              size={18}
+                              color={item.userAlerted ? "#FFFFFF" : "#000000"}
+                            />
+                            <Text style={[styles.actionText, item.userAlerted && styles.alertedText]}>
+                              {item.alertCount} alerted
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity style={styles.actionButton} onPress={() => handleCommentPress(item.id)}>
+                            <Ionicons name="chatbubble-outline" size={18} color="#000000" />
+                            <Text style={styles.actionText}>{item.commentCount} comments</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity style={styles.actionButton} onPress={() => handleMapPress(item.id)}>
+                            <Ionicons name="location-outline" size={18} color="#000000" />
+                            <Text style={styles.actionText}>Map</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity style={styles.actionButton} onPress={() => handleSharePress(item.id)}>
+                            <Ionicons name="share-social-outline" size={18} color="#000000" />
+                            <Text style={styles.actionText}>{item.shareCount}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
 
                 {/* Verification UI */}
                 {showVerification && (
@@ -620,70 +692,78 @@ const ForumScreen: React.FC = () => {
                     </View>
 
                     {/* Comments Section */}
-                    {sortedComments.map((comment) => (
-                      <View key={comment.id} style={styles.commentContainer}>
-                        <View style={styles.commentHeader}>
-                          <Ionicons name="person-circle-outline" size={24} color="#000000" />
-                          <Text style={styles.commenterName}>{comment.username}</Text>
-                        </View>
+                    {sortedComments.length === 0 ? (
+                      <View style={styles.emptyCommentsContainer}>
+                        <Ionicons name="chatbubble-outline" size={40} color="#CCC" />
+                        <Text style={styles.emptyCommentsText}>No comments yet</Text>
+                        <Text style={styles.emptyCommentsSubtext}>Be the first to comment</Text>
+                      </View>
+                    ) : (
+                      sortedComments.map((comment) => (
+                        <View key={comment.id} style={styles.commentContainer}>
+                          <View style={styles.commentHeader}>
+                            <Ionicons name="person-circle-outline" size={24} color="#000000" />
+                            <Text style={styles.commenterName}>{comment.username}</Text>
+                          </View>
 
-                        <Text style={styles.commentText} numberOfLines={3} ellipsizeMode="tail">
-                          {comment.text}
-                        </Text>
+                          <Text style={styles.commentText} numberOfLines={3} ellipsizeMode="tail">
+                            {comment.text}
+                          </Text>
 
-                        <View style={styles.commentActions}>
-                          <TouchableOpacity style={styles.commentAction} onPress={() => handleThumbsUp(comment.id)}>
-                            <Ionicons
-                              name={comment.userLiked ? "thumbs-up" : "thumbs-up-outline"}
-                              size={18}
-                              color={comment.userLiked ? "#FF0000" : "#000000"}
-                            />
-                            <Text style={[styles.commentActionText, comment.userLiked && styles.activeActionText]}>
-                              {comment.thumbsUp}
-                            </Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity style={styles.commentAction} onPress={() => handleThumbsDown(comment.id)}>
-                            <Ionicons
-                              name={comment.userDisliked ? "thumbs-down" : "thumbs-down-outline"}
-                              size={18}
-                              color={comment.userDisliked ? "#FF0000" : "#000000"}
-                            />
-                            <Text style={[styles.commentActionText, comment.userDisliked && styles.activeActionText]}>
-                              {comment.thumbsDown}
-                            </Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity style={styles.commentAction} onPress={() => handleReplyPress(comment.id)}>
-                            <Ionicons name="arrow-undo-outline" size={18} color="#000000" />
-                            <Text style={styles.commentActionText}>Reply</Text>
-                          </TouchableOpacity>
-
-                          {comment.replies.length > 0 && (
-                            <TouchableOpacity style={styles.commentAction} onPress={() => toggleReplies(comment.id)}>
-                              <Text style={styles.commentActionText}>
-                                {comment.showReplies ? "Hide" : "Show"} {comment.replies.length} replies
+                          <View style={styles.commentActions}>
+                            <TouchableOpacity style={styles.commentAction} onPress={() => handleThumbsUp(comment.id)}>
+                              <Ionicons
+                                name={comment.userLiked ? "thumbs-up" : "thumbs-up-outline"}
+                                size={18}
+                                color={comment.userLiked ? "#FF0000" : "#000000"}
+                              />
+                              <Text style={[styles.commentActionText, comment.userLiked && styles.activeActionText]}>
+                                {comment.thumbsUp}
                               </Text>
                             </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.commentAction} onPress={() => handleThumbsDown(comment.id)}>
+                              <Ionicons
+                                name={comment.userDisliked ? "thumbs-down" : "thumbs-down-outline"}
+                                size={18}
+                                color={comment.userDisliked ? "#FF0000" : "#000000"}
+                              />
+                              <Text style={[styles.commentActionText, comment.userDisliked && styles.activeActionText]}>
+                                {comment.thumbsDown}
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.commentAction} onPress={() => handleReplyPress(comment.id)}>
+                              <Ionicons name="arrow-undo-outline" size={18} color="#000000" />
+                              <Text style={styles.commentActionText}>Reply</Text>
+                            </TouchableOpacity>
+
+                            {comment.replies.length > 0 && (
+                              <TouchableOpacity style={styles.commentAction} onPress={() => toggleReplies(comment.id)}>
+                                <Text style={styles.commentActionText}>
+                                  {comment.showReplies ? "Hide" : "Show"} {comment.replies.length} replies
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+
+                          {/* Replies */}
+                          {comment.showReplies && comment.replies.length > 0 && (
+                            <View style={styles.repliesContainer}>
+                              {comment.replies.map((reply) => (
+                                <View key={reply.id} style={styles.replyContainer}>
+                                  <View style={styles.replyHeader}>
+                                    <Ionicons name="person-circle-outline" size={20} color="#000000" />
+                                    <Text style={styles.replyUsername}>{reply.username}</Text>
+                                  </View>
+                                  <Text style={styles.replyText}>{reply.text}</Text>
+                                </View>
+                              ))}
+                            </View>
                           )}
                         </View>
-
-                        {/* Replies */}
-                        {comment.showReplies && comment.replies.length > 0 && (
-                          <View style={styles.repliesContainer}>
-                            {comment.replies.map((reply) => (
-                              <View key={reply.id} style={styles.replyContainer}>
-                                <View style={styles.replyHeader}>
-                                  <Ionicons name="person-circle-outline" size={20} color="#000000" />
-                                  <Text style={styles.replyUsername}>{reply.username}</Text>
-                                </View>
-                                <Text style={styles.replyText}>{reply.text}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        )}
-                      </View>
-                    ))}
+                      ))
+                    )}
                   </>
                 )}
               </>
@@ -771,6 +851,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#ffffff",
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#666",
+  },
   content: {
     flex: 1,
     paddingHorizontal: 16,
@@ -819,6 +910,39 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     fontSize: 14,
     color: "#333",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: "#666",
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: "#999",
+  },
+  emptyCommentsContainer: {
+    alignItems: "center",
+    padding: 30,
+    backgroundColor: "#F8F9FA",
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  emptyCommentsText: {
+    fontSize: 16,
+    color: "#666",
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  emptyCommentsSubtext: {
+    fontSize: 14,
+    color: "#999",
   },
   newsItemCard: {
     backgroundColor: "#ffffff",

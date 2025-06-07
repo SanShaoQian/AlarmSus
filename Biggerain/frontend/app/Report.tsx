@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { LOCAL_IP, DEV_IP, PROD_IP, NODE_ENV } from '@env';
 import { useRouter } from "expo-router"
 import {
   View,
@@ -13,16 +14,27 @@ import {
   Image,
   Modal,
   Dimensions,
+  Platform,
 } from "react-native"
 import { Ionicons } from "@expo/vector-icons"
 import * as Location from "expo-location"
 import * as ImagePicker from "expo-image-picker"
+
 const { width: screenWidth } = Dimensions.get("window")
 
 // Get the local IP address for development
-const API_BASE_URL = __DEV__
-  ? "http://192.168.0.51:3000" // Replace with your computer's IP
-  : "https://your-production-api.com"
+
+const isMobile = Platform.OS === 'ios' || Platform.OS === 'android';
+
+// If production, use PROD_IP no matter what
+// Else if mobile device, use DEV_IP (your computer’s LAN IP)
+// Else use LOCAL_IP (your laptop’s localhost)
+
+const API_BASE_URL = NODE_ENV === 'production'
+  ? PROD_IP
+  : isMobile
+    ? DEV_IP
+    : LOCAL_IP;
 
 interface EmergencyServices {
   police: boolean

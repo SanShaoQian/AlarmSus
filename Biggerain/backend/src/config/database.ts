@@ -6,7 +6,7 @@ dotenv.config()
 const pool = new Pool({
   host: process.env.PGHOST || "localhost",
   user: process.env.PGUSER || "postgres",
-  password: "mypassword",
+  password: process.env.PGPASSWORD || "",
   database: process.env.PGDATABASE || "reports_db",
   port: Number.parseInt(process.env.PGPORT || "5432", 10),
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,

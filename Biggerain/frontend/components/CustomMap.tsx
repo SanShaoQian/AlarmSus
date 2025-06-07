@@ -1,206 +1,157 @@
 "use client"
 
-import * as Location from "expo-location"
-import { Suspense, lazy, useEffect, useState } from "react"
-import { Alert, Dimensions, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native"
-import { fetchNearbyAEDs } from "../services/aedcsv"
-
-const MapView = lazy(() => import('react-native-maps'))
-const Marker = lazy(() => import('react-native-maps').then(mod => ({ default: mod.Marker })))
+import type React from "react"
+import { useState } from "react"
+import { View, Text, StyleSheet, Dimensions, Platform } from "react-native"
 
 const { width, height } = Dimensions.get("window")
 
-type Props = {
-  showAEDs: boolean
+interface AED {
+  id: string
+  name: string
+  latitude: number
+  longitude: number
+  address: string
 }
 
-export default function CustomMap({ showAEDs }: Props) {
-  const [location, setLocation] = useState<Location.LocationObject | null>(null)
-  const [nearbyAeds, setNearbyAeds] = useState<any[]>([])
-  const [searchRadius, setSearchRadius] = useState(500)
-
-  useEffect(() => {
-    ;(async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync()
-        if (status !== "granted") {
-          Alert.alert("Permission denied", "Location access is required.")
-          return
-        }
-
-        const loc = await Location.getCurrentPositionAsync({})
-        setLocation(loc)
-      } catch (error) {
-        console.log("Location error:", error)
-        setLocation({
-          coords: {
-            latitude: 1.3521,
-            longitude: 103.8198,
-            altitude: null,
-            accuracy: null,
-            altitudeAccuracy: null,
-            heading: null,
-            speed: null,
-          },
-          timestamp: Date.now(),
-        })
-      }
-    })()
-  }, [])
-
-  useEffect(() => {
-    if (showAEDs && location) {
-      fetchNearbyAEDs(
-        location.coords.latitude,
-        location.coords.longitude,
-        searchRadius
-      ).then((aeds) => setNearbyAeds(aeds))
-    } else {
-      setNearbyAeds([])
-    }
-  }, [showAEDs, location, searchRadius])
-
-  const openInGoogleMaps = (latitude: number, longitude: number) => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
-    Linking.openURL(url)
+interface CustomMapProps {
+  userLocation?: {
+    latitude: number
+    longitude: number
   }
+  aeds?: AED[]
+  onAEDPress?: (aed: AED) => void
+}
 
-  const adjustSearchRadius = (increase: boolean) => {
-    setSearchRadius(prev => {
-      const newRadius = increase ? prev + 500 : Math.max(500, prev - 500)
-      return newRadius
-    })
-  }
+const CustomMap: React.FC<CustomMapProps> = ({ userLocation, aeds = [], onAEDPress }) => {
+  const [mapError, setMapError] = useState<string | null>(null)
 
-  if (!location) {
+  // For web platform, we'll use a simple placeholder
+  if (Platform.OS === "web") {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading map...</Text>
+      <View style={styles.webMapContainer}>
+        <View style={styles.webMapPlaceholder}>
+          <Text style={styles.webMapTitle}>Map View</Text>
+          {userLocation && (
+            <Text style={styles.webMapText}>
+              Your Location: {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
+            </Text>
+          )}
+          {aeds.length > 0 && (
+            <View style={styles.aedList}>
+              <Text style={styles.aedListTitle}>Nearby AEDs:</Text>
+              {aeds.slice(0, 3).map((aed) => (
+                <Text key={aed.id} style={styles.aedItem}>
+                  📍 {aed.name} - {aed.address}
+                </Text>
+              ))}
+            </View>
+          )}
+          <Text style={styles.webMapNote}>Note: Interactive map requires mobile app</Text>
+        </View>
       </View>
     )
   }
 
+  // For mobile platforms, show a placeholder until react-native-maps is properly set up
   return (
-    <View style={styles.container}>
-      <Suspense fallback={<View style={styles.loadingContainer}><Text>Loading map...</Text></View>}>
-        <MapView
-          style={styles.map}
-          initialRegion={{
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          showsUserLocation
-        >
-          {showAEDs && nearbyAeds.map((aed, index) => (
-            <Marker
-              key={index}
-              coordinate={{
-                latitude: parseFloat(aed.LATITUDE),
-                longitude: parseFloat(aed.LONGITUDE),
-              }}
-              title={aed.DESCRIPTION || 'AED'}
-              description={aed.ADDRESS || 'No address info'}
-              onCalloutPress={() => openInGoogleMaps(parseFloat(aed.LATITUDE), parseFloat(aed.LONGITUDE))}
-            />
-          ))}
-        </MapView>
-      </Suspense>
-
-      {showAEDs && (
-        <View style={styles.controlsOverlay}>
-          <View style={styles.controlsContainer}>
-            <Text style={styles.radiusText}>Search Radius: {searchRadius}m</Text>
-            <View style={styles.radiusControls}>
-              <TouchableOpacity 
-                style={styles.radiusButton} 
-                onPress={() => adjustSearchRadius(false)}
-              >
-                <Text style={styles.radiusButtonText}>-</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.radiusButton} 
-                onPress={() => adjustSearchRadius(true)}
-              >
-                <Text style={styles.radiusButtonText}>+</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {nearbyAeds.length > 0 ? (
-            <Text style={styles.aedCountText}>Found {nearbyAeds.length} AEDs nearby</Text>
-          ) : (
-            <Text style={styles.aedCountText}>No AEDs found within {searchRadius}m</Text>
-          )}
-        </View>
-      )}
+    <View style={styles.mobileMapContainer}>
+      <View style={styles.mobileMapPlaceholder}>
+        <Text style={styles.mobileMapTitle}>Map Component</Text>
+        <Text style={styles.mobileMapText}>
+          Map functionality will be available when react-native-maps is configured
+        </Text>
+        {userLocation && (
+          <Text style={styles.mobileMapText}>
+            Location: {userLocation.latitude.toFixed(4)}, {userLocation.longitude.toFixed(4)}
+          </Text>
+        )}
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    position: 'relative',
+  webMapContainer: {
+    width: "100%",
+    height: 300,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+    overflow: "hidden",
   },
-  loadingContainer: {
+  webMapPlaceholder: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    padding: 20,
+    backgroundColor: "#e8f4f8",
+    borderWidth: 2,
+    borderColor: "#b0d4e3",
+    borderStyle: "dashed",
   },
-  map: {
-    width: '100%',
-    height: '100%',
+  webMapTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#2c5282",
+    marginBottom: 10,
   },
-  controlsOverlay: {
-    position: "absolute",
-    top: 20,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    zIndex: 1000,
-  },
-  controlsContainer: {
-    backgroundColor: "white",
-    padding: 10,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    alignItems: "center",
-  },
-  radiusText: {
-    fontSize: 16,
-    color: "#333",
+  webMapText: {
+    fontSize: 14,
+    color: "#2d3748",
+    textAlign: "center",
     marginBottom: 8,
   },
-  radiusControls: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 20,
+  webMapNote: {
+    fontSize: 12,
+    color: "#718096",
+    fontStyle: "italic",
+    marginTop: 10,
   },
-  radiusButton: {
-    width: 40,
-    height: 40,
-    backgroundColor: "#2196F3",
-    borderRadius: 20,
+  aedList: {
+    marginTop: 15,
+    width: "100%",
+  },
+  aedListTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2c5282",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  aedItem: {
+    fontSize: 12,
+    color: "#4a5568",
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  mobileMapContainer: {
+    width: "100%",
+    height: 300,
+    backgroundColor: "#f7fafc",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  mobileMapPlaceholder: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    padding: 20,
+    backgroundColor: "#edf2f7",
+    borderWidth: 1,
+    borderColor: "#cbd5e0",
   },
-  radiusButtonText: {
-    color: "#fff",
-    fontSize: 24,
+  mobileMapTitle: {
+    fontSize: 18,
     fontWeight: "bold",
+    color: "#2d3748",
+    marginBottom: 10,
   },
-  aedCountText: {
-    marginTop: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    padding: 8,
-    borderRadius: 4,
+  mobileMapText: {
     fontSize: 14,
-    color: "#333",
+    color: "#4a5568",
+    textAlign: "center",
+    marginBottom: 8,
   },
 })
+
+export default CustomMap
