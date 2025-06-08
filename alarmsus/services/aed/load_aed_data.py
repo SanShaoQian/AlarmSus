@@ -10,7 +10,7 @@ def load_aed_data():
     
     # Connect to PostgreSQL
     conn = psycopg2.connect(
-        dbname="alarmsus",  # Replace with your database name
+        dbname="reports_db",  # Replace with your database name
         user="postgres",    # Replace with your username
         password="QHCqhc200-100", # Replace with your password
         host="localhost",
