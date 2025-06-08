@@ -2,13 +2,12 @@
 
 import * as Location from "expo-location"
 import { Suspense, lazy, useEffect, useState } from "react"
-import { Alert, Dimensions, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native"
-import { fetchNearbyAEDs } from "../services/aedcsv"
+import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native"
+import { fetchNearbyAEDs } from "../services/aed/aedService"
+import { AED } from "../types/aed"
 
 const MapView = lazy(() => import('react-native-maps'))
 const Marker = lazy(() => import('react-native-maps').then(mod => ({ default: mod.Marker })))
-
-const { width, height } = Dimensions.get("window")
 
 type Props = {
   showAEDs: boolean
@@ -16,7 +15,7 @@ type Props = {
 
 export default function CustomMap({ showAEDs }: Props) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null)
-  const [nearbyAeds, setNearbyAeds] = useState<any[]>([])
+  const [nearbyAeds, setNearbyAeds] = useState<AED[]>([])
   const [searchRadius, setSearchRadius] = useState(500)
 
   useEffect(() => {
@@ -32,6 +31,7 @@ export default function CustomMap({ showAEDs }: Props) {
         setLocation(loc)
       } catch (error) {
         console.log("Location error:", error)
+        // Default to Singapore center coordinates
         setLocation({
           coords: {
             latitude: 1.3521,
@@ -54,7 +54,7 @@ export default function CustomMap({ showAEDs }: Props) {
         location.coords.latitude,
         location.coords.longitude,
         searchRadius
-      ).then((aeds) => setNearbyAeds(aeds))
+      ).then(setNearbyAeds)
     } else {
       setNearbyAeds([])
     }
@@ -93,16 +93,16 @@ export default function CustomMap({ showAEDs }: Props) {
           }}
           showsUserLocation
         >
-          {showAEDs && nearbyAeds.map((aed, index) => (
+          {showAEDs && nearbyAeds.map((aed) => (
             <Marker
-              key={index}
+              key={aed.id}
               coordinate={{
-                latitude: parseFloat(aed.LATITUDE),
-                longitude: parseFloat(aed.LONGITUDE),
+                latitude: aed.latitude,
+                longitude: aed.longitude,
               }}
-              title={aed.DESCRIPTION || 'AED'}
-              description={aed.ADDRESS || 'No address info'}
-              onCalloutPress={() => openInGoogleMaps(parseFloat(aed.LATITUDE), parseFloat(aed.LONGITUDE))}
+              title={aed.building_name}
+              description={`${aed.location_description}\nDistance: ${(aed.distance_km * 1000).toFixed(0)}m`}
+              onCalloutPress={() => openInGoogleMaps(aed.latitude, aed.longitude)}
             />
           ))}
         </MapView>
@@ -128,11 +128,11 @@ export default function CustomMap({ showAEDs }: Props) {
             </View>
           </View>
 
-          {nearbyAeds.length > 0 ? (
-            <Text style={styles.aedCountText}>Found {nearbyAeds.length} AEDs nearby</Text>
-          ) : (
-            <Text style={styles.aedCountText}>No AEDs found within {searchRadius}m</Text>
-          )}
+          <Text style={styles.aedCountText}>
+            {nearbyAeds.length > 0 
+              ? `Found ${nearbyAeds.length} AEDs nearby`
+              : `No AEDs found within ${searchRadius}m`}
+          </Text>
         </View>
       )}
     </View>

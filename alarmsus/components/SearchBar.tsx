@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button, StyleSheet, TextInput, View } from "react-native"
-import { searchAddress } from "../services/onemap"
+import { searchAddress } from "../services/aed/bin/onemap"
 
 export default function SearchBar() {
   const [query, setQuery] = useState("")
