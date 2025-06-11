@@ -5,18 +5,36 @@ import { Suspense, lazy, useEffect, useState } from "react"
 import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native"
 import { fetchNearbyAEDs } from "../services/aed/aedService"
 import { AED } from "../types/aed"
+import { getNearbyEntities } from '../backend/utils/supabaseClient'
+import MapView, { Marker } from 'react-native-maps'
 
-const MapView = lazy(() => import('react-native-maps'))
-const Marker = lazy(() => import('react-native-maps').then(mod => ({ default: mod.Marker })))
+const MapViewComponent = lazy(() => import('react-native-maps'))
+const MarkerComponent = lazy(() => import('react-native-maps').then(mod => ({ default: mod.Marker })))
 
 type Props = {
   showAEDs: boolean
+}
+
+interface MapEntity {
+  id: number;
+  title: string;
+  type: 'report' | 'aed';
+  latitude: number;
+  longitude: number;
+  distance: number;
 }
 
 export default function CustomMap({ showAEDs }: Props) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null)
   const [nearbyAeds, setNearbyAeds] = useState<AED[]>([])
   const [searchRadius, setSearchRadius] = useState(500)
+  const [entities, setEntities] = useState<MapEntity[]>([])
+  const [region, setRegion] = useState({
+    latitude: 1.3521, // Singapore's latitude
+    longitude: 103.8198, // Singapore's longitude
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
+  })
 
   useEffect(() => {
     ;(async () => {
@@ -60,6 +78,21 @@ export default function CustomMap({ showAEDs }: Props) {
     }
   }, [showAEDs, location, searchRadius])
 
+  useEffect(() => {
+    const loadEntities = async () => {
+      try {
+        const data = await getNearbyEntities(region.longitude, region.latitude, 5000) // 5km radius
+        if (data) {
+          setEntities(data)
+        }
+      } catch (error) {
+        console.error('Error loading map entities:', error)
+      }
+    }
+
+    loadEntities()
+  }, [region])
+
   const openInGoogleMaps = (latitude: number, longitude: number) => {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
     Linking.openURL(url)
@@ -85,26 +118,23 @@ export default function CustomMap({ showAEDs }: Props) {
       <Suspense fallback={<View style={styles.loadingContainer}><Text>Loading map...</Text></View>}>
         <MapView
           style={styles.map}
-          initialRegion={{
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          showsUserLocation
+          region={region}
+          onRegionChangeComplete={setRegion}
         >
-          {showAEDs && nearbyAeds.map((aed) => (
-            <Marker
-              key={aed.id}
-              coordinate={{
-                latitude: aed.latitude,
-                longitude: aed.longitude,
-              }}
-              title={aed.building_name}
-              description={`${aed.location_description}\nDistance: ${(aed.distance_km * 1000).toFixed(0)}m`}
-              onCalloutPress={() => openInGoogleMaps(aed.latitude, aed.longitude)}
-            />
-          ))}
+          {entities
+            .filter(entity => entity.type === 'report' || (showAEDs && entity.type === 'aed'))
+            .map(entity => (
+              <Marker
+                key={`${entity.type}-${entity.id}`}
+                coordinate={{
+                  latitude: entity.latitude,
+                  longitude: entity.longitude,
+                }}
+                title={entity.title}
+                description={`${Math.round(entity.distance)}m away`}
+                pinColor={entity.type === 'aed' ? '#1DA1F2' : '#FF3B30'} // Blue for AEDs, Red for reports
+              />
+            ))}
         </MapView>
       </Suspense>
 

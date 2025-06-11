@@ -19,6 +19,7 @@ import {
   View,
 } from "react-native"
 import Footer from "../components/Footer"
+import { submitIncidentReport } from "../backend/utils/supabaseClient"
 
 const { width: screenWidth } = Dimensions.get("window")
 
@@ -106,7 +107,7 @@ const ReportScreen: React.FC = () => {
   // Check if form can be submitted
   const isSubmitActive = legalAgreement && (!isEmergency || (isEmergency && hasSelectedService))
 
-  const handleSubmit = (): void => {
+  const handleSubmit = async (): Promise<void> => {
     if (!legalAgreement) {
       setShowLegalWarning(true)
       return
@@ -117,8 +118,46 @@ const ReportScreen: React.FC = () => {
       return
     }
 
-    // Here you would normally send the report data to your backend
-    setShowSubmissionSuccess(true)
+    try {
+      // Get emergency type
+      let emergency_type: 'police' | 'ambulance' | 'fire' | 'others' | undefined;
+      if (isEmergency) {
+        if (selectedServices.police) emergency_type = 'police';
+        else if (selectedServices.ambulance) emergency_type = 'ambulance';
+        else if (selectedServices.fire) emergency_type = 'fire';
+      }
+
+      // Get coordinates from location string
+      let latitude = 0, longitude = 0;
+      try {
+        const locationResult = await Location.geocodeAsync(location);
+        if (locationResult.length > 0) {
+          latitude = locationResult[0].latitude;
+          longitude = locationResult[0].longitude;
+        }
+      } catch (error) {
+        console.error('Geocoding error:', error);
+      }
+
+      // Submit report
+      await submitIncidentReport({
+        title: caption.split('\n')[0] || 'Untitled Report', // Use first line as title
+        caption,
+        emergency_type,
+        is_in_danger: isInDanger,
+        location,
+        report_anonymously: reportAnonymously,
+        image_url: uploadedImageUri || undefined,
+        latitude,
+        longitude
+      });
+
+      // Show success screen
+      setShowSubmissionSuccess(true);
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      Alert.alert('Error', 'Failed to submit report. Please try again.');
+    }
   }
 
   const handleReportNewIncident = (): void => {

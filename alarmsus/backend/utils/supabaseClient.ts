@@ -1,0 +1,179 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = 'https://qughkaumzlasgvpsdwfp.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1Z2hrYXVtemxhc2d2cHNkd2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkxMzEyNTUsImV4cCI6MjA2NDcwNzI1NX0.p9qUHIGZL8EMEfB80h46sJVwwSWyly5wvZ9GCQsVc68';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Function to submit a new incident report
+export const submitIncidentReport = async (reportData: {
+  title: string;
+  caption: string;
+  emergency_type?: 'police' | 'ambulance' | 'fire' | 'others';
+  is_in_danger: boolean;
+  location: string;
+  report_anonymously: boolean;
+  image_url?: string;
+  longitude: number;
+  latitude: number;
+}) => {
+  const { data, error } = await supabase
+    .from('incident_reports')
+    .insert([{
+      ...reportData,
+      geom: `POINT(${reportData.longitude} ${reportData.latitude})`
+    }])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+// Function to get nearby entities
+export const getNearbyEntities = async (longitude: number, latitude: number, distanceMeters: number) => {
+  const { data, error } = await supabase.rpc('get_nearby_entities', {
+    user_lon: longitude,
+    user_lat: latitude,
+    search_distance_meters: distanceMeters,
+  });
+
+  if (error) {
+    console.error('Error fetching nearby entities:', error);
+    return null;
+  }
+
+  return data;
+};
+
+// Function to get forum posts
+export const getForumPosts = async () => {
+  const { data, error } = await supabase
+    .from('incident_reports')
+    .select(`
+      *,
+      comments (
+        *,
+        replies (*)
+      )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+};
+
+// Function to add a comment
+export const addComment = async (reportId: number, userId: string, username: string, text: string) => {
+  const { data, error } = await supabase
+    .from('comments')
+    .insert([{
+      incident_report_id: reportId,
+      user_id: userId,
+      username,
+      text
+    }])
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // Update comment count
+  await supabase
+    .from('incident_reports')
+    .update({ comment_count: supabase.raw('comment_count + 1') })
+    .eq('id', reportId);
+
+  return data;
+};
+
+// Function to add a reply
+export const addReply = async (commentId: number, userId: string, username: string, text: string) => {
+  const { data, error } = await supabase
+    .from('replies')
+    .insert([{
+      comment_id: commentId,
+      user_id: userId,
+      username,
+      text
+    }])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+// Function to handle user interactions (alerts, likes, dislikes, shares)
+export const handleInteraction = async (
+  userId: string,
+  reportId: number,
+  commentId: number | null,
+  interactionType: 'alert' | 'like' | 'dislike' | 'share'
+) => {
+  const { error } = await supabase
+    .from('user_interactions')
+    .insert([{
+      user_id: userId,
+      incident_report_id: reportId,
+      comment_id: commentId,
+      interaction_type: interactionType
+    }])
+    .select();
+
+  if (error && error.code === '23505') { // Unique violation
+    // Remove the interaction
+    await supabase
+      .from('user_interactions')
+      .delete()
+      .match({
+        user_id: userId,
+        incident_report_id: reportId,
+        comment_id: commentId,
+        interaction_type: interactionType
+      });
+
+    // Update counts
+    if (interactionType === 'alert') {
+      await supabase
+        .from('incident_reports')
+        .update({ alert_count: supabase.raw('alert_count - 1') })
+        .eq('id', reportId);
+    } else if (interactionType === 'share') {
+      await supabase
+        .from('incident_reports')
+        .update({ share_count: supabase.raw('share_count - 1') })
+        .eq('id', reportId);
+    } else if (commentId) {
+      await supabase
+        .from('comments')
+        .update({
+          thumbs_up: supabase.raw(interactionType === 'like' ? 'thumbs_up - 1' : 'thumbs_up'),
+          thumbs_down: supabase.raw(interactionType === 'dislike' ? 'thumbs_down - 1' : 'thumbs_down')
+        })
+        .eq('id', commentId);
+    }
+  } else if (!error) {
+    // Update counts
+    if (interactionType === 'alert') {
+      await supabase
+        .from('incident_reports')
+        .update({ alert_count: supabase.raw('alert_count + 1') })
+        .eq('id', reportId);
+    } else if (interactionType === 'share') {
+      await supabase
+        .from('incident_reports')
+        .update({ share_count: supabase.raw('share_count + 1') })
+        .eq('id', reportId);
+    } else if (commentId) {
+      await supabase
+        .from('comments')
+        .update({
+          thumbs_up: supabase.raw(interactionType === 'like' ? 'thumbs_up + 1' : 'thumbs_up'),
+          thumbs_down: supabase.raw(interactionType === 'dislike' ? 'thumbs_down + 1' : 'thumbs_down')
+        })
+        .eq('id', commentId);
+    }
+  }
+};
+  
