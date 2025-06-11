@@ -1,22 +1,102 @@
 "use client"
 
 import * as Location from "expo-location"
-import { Suspense, lazy, useEffect, useState } from "react"
-import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native"
+import { Suspense, useEffect, useState } from "react"
+import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native"
 import { fetchNearbyAEDs } from "../services/aed/aedService"
 import { AED } from "../types/aed"
+import { getNearbyEntities } from '../backend/utils/supabaseClient'
 
-const MapView = lazy(() => import('react-native-maps'))
-const Marker = lazy(() => import('react-native-maps').then(mod => ({ default: mod.Marker })))
+// Only import Leaflet components for web platform
+let MapContainer: any = View;
+let TileLayer: any = View;
+let Marker: any = View;
+let Popup: any = View;
+let L: any = null;
+
+if (Platform.OS === 'web') {
+  const leaflet = require('react-leaflet');
+  const leafletBase = require('leaflet');
+  MapContainer = leaflet.MapContainer;
+  TileLayer = leaflet.TileLayer;
+  Marker = leaflet.Marker;
+  Popup = leaflet.Popup;
+  L = leafletBase.default;
+  
+  require('leaflet/dist/leaflet.css');
+  
+  // Fix Leaflet marker icon issue
+  delete (L.Icon.Default.prototype as any)._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+    iconUrl: require('leaflet/dist/images/marker-icon.png'),
+    shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
+  });
+}
 
 type Props = {
   showAEDs: boolean
 }
 
+interface MapEntity {
+  id: string;
+  type: string;
+  title: string;
+  latitude: number;
+  longitude: number;
+  distance: number;
+}
+
+const WebMap = ({ entities, showAEDs, center }: { entities: MapEntity[], showAEDs: boolean, center: [number, number] }) => (
+  <div style={{ height: '100%', width: '100%' }}>
+    <MapContainer
+      center={center}
+      zoom={15}
+      style={{ height: '100%', width: '100%' }}
+    >
+      <TileLayer
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      />
+      {entities
+        .filter(entity => entity.type === 'report' || (showAEDs && entity.type === 'aed'))
+        .map(entity => (
+          <Marker
+            key={`${entity.type}-${entity.id}`}
+            position={[entity.latitude, entity.longitude]}
+            icon={L.icon({
+              iconUrl: entity.type === 'aed' ? '/markers/aed-marker.svg' : '/markers/report-marker.svg',
+              iconSize: [25, 41],
+              iconAnchor: [12, 41],
+              popupAnchor: [1, -34],
+              shadowSize: [41, 41]
+            })}
+          >
+            <Popup>
+              <div>
+                <div style={{ fontWeight: 'bold' }}>{entity.title}</div>
+                <div>{`${Math.round(entity.distance)}m away`}</div>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+    </MapContainer>
+  </div>
+);
+
+const NativeMap = ({ entities, showAEDs }: { entities: MapEntity[], showAEDs: boolean }) => (
+  <View style={styles.nativeMapContainer}>
+    <Text>Map view is only available on web platform</Text>
+    <Text>Found {entities.filter(e => e.type === 'aed').length} AEDs nearby</Text>
+  </View>
+);
+
 export default function CustomMap({ showAEDs }: Props) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null)
   const [nearbyAeds, setNearbyAeds] = useState<AED[]>([])
   const [searchRadius, setSearchRadius] = useState(500)
+  const [entities, setEntities] = useState<MapEntity[]>([])
+  const [center, setCenter] = useState<[number, number]>([1.3521, 103.8198]) // Singapore's coordinates
 
   useEffect(() => {
     ;(async () => {
@@ -29,6 +109,7 @@ export default function CustomMap({ showAEDs }: Props) {
 
         const loc = await Location.getCurrentPositionAsync({})
         setLocation(loc)
+        setCenter([loc.coords.latitude, loc.coords.longitude])
       } catch (error) {
         console.log("Location error:", error)
         // Default to Singapore center coordinates
@@ -60,10 +141,22 @@ export default function CustomMap({ showAEDs }: Props) {
     }
   }, [showAEDs, location, searchRadius])
 
-  const openInGoogleMaps = (latitude: number, longitude: number) => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`
-    Linking.openURL(url)
-  }
+  useEffect(() => {
+    const loadEntities = async () => {
+      if (!location) return
+      
+      try {
+        const data = await getNearbyEntities(location.coords.longitude, location.coords.latitude, 5000) // 5km radius
+        if (data) {
+          setEntities(data)
+        }
+      } catch (error) {
+        console.error('Error loading map entities:', error)
+      }
+    }
+
+    loadEntities()
+  }, [location])
 
   const adjustSearchRadius = (increase: boolean) => {
     setSearchRadius(prev => {
@@ -83,29 +176,11 @@ export default function CustomMap({ showAEDs }: Props) {
   return (
     <View style={styles.container}>
       <Suspense fallback={<View style={styles.loadingContainer}><Text>Loading map...</Text></View>}>
-        <MapView
-          style={styles.map}
-          initialRegion={{
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          showsUserLocation
-        >
-          {showAEDs && nearbyAeds.map((aed) => (
-            <Marker
-              key={aed.id}
-              coordinate={{
-                latitude: aed.latitude,
-                longitude: aed.longitude,
-              }}
-              title={aed.building_name}
-              description={`${aed.location_description}\nDistance: ${(aed.distance_km * 1000).toFixed(0)}m`}
-              onCalloutPress={() => openInGoogleMaps(aed.latitude, aed.longitude)}
-            />
-          ))}
-        </MapView>
+        {Platform.OS === 'web' ? (
+          <WebMap entities={entities} showAEDs={showAEDs} center={center} />
+        ) : (
+          <NativeMap entities={entities} showAEDs={showAEDs} />
+        )}
       </Suspense>
 
       {showAEDs && (
@@ -149,9 +224,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  map: {
-    width: '100%',
-    height: '100%',
+  nativeMapContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
+    padding: 20,
   },
   controlsOverlay: {
     position: "absolute",

@@ -19,6 +19,55 @@ import {
   View,
 } from "react-native"
 import Footer from "../components/Footer"
+import { addComment, addReply, getForumPosts, handleInteraction } from "../backend/utils/supabaseClient"
+
+interface SupabaseReply {
+  id: number
+  username: string
+  text: string
+}
+
+interface SupabaseComment {
+  id: number
+  username: string
+  text: string
+  thumbs_up: number
+  thumbs_down: number
+  replies?: SupabaseReply[]
+}
+
+interface SupabasePost {
+  id: number
+  title: string
+  isVerified: boolean
+  created_at: string
+  location: string
+  image_url: string | null
+  alert_count: number
+  comment_count: number
+  share_count: number
+  comments?: SupabaseComment[]
+}
+
+// Utility function to format relative time
+const getRelativeTime = (date: string): string => {
+  const now = new Date();
+  const then = new Date(date);
+  const diffInSeconds = Math.floor((now.getTime() - then.getTime()) / 1000);
+
+  if (diffInSeconds < 60) {
+    return 'just now';
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  } else {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+  }
+};
 
 // Types
 interface Comment {
@@ -69,75 +118,50 @@ const ForumScreen: React.FC = () => {
   const [showShareModal, setShowShareModal] = useState<boolean>(false)
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyText, setReplyText] = useState<string>("")
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([])
 
-  // Sample news data
-  const [newsItems, setNewsItems] = useState<NewsItem[]>([
-    {
-      id: "1",
-      title: "Fire in Kranji",
-      isVerified: true,
-      timestamp: "1 hour ago",
-      location: "A fire at Block 39, Telok Blangah Rise",
-      distance: "200m away from you",
-      imageUrl:
-        "https://dam.mediacorp.sg/image/upload/s--EDoeDMAN--/f_auto,q_auto/c_fill,g_auto,h_676,w_1200/v1/mediacorp/cna/image/2022/01/29/d0208994-1d43-4c31-9a6d-82df8333a9a3.jpg?itok=1w6lh1qI",
-      alertCount: 21,
-      commentCount: 18,
-      shareCount: 26,
-      userAlerted: false,
-      comments: [
-        {
-          id: "1",
-          username: "commenter1",
-          text: "comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment...",
-          thumbsUp: 20,
-          thumbsDown: 5,
-          replies: [
-            { id: "1-1", username: "user1", text: "Reply to comment 1" },
-            { id: "1-2", username: "user2", text: "Another reply to comment 1" },
-          ],
-          showReplies: false,
-        },
-        {
-          id: "2",
-          username: "commenter2",
-          text: "comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment comment...",
-          thumbsUp: 15,
-          thumbsDown: 3,
-          replies: [{ id: "2-1", username: "user3", text: "Reply to comment 2" }],
-          showReplies: false,
-        },
-      ],
-    },
-    {
-      id: "2",
-      title: "Someone collapsed!",
-      isVerified: false,
-      timestamp: "58 minutes ago",
-      location: "",
-      distance: "100m away from you",
-      imageUrl: "",
-      alertCount: 11,
-      commentCount: 5,
-      shareCount: 9,
-      userAlerted: false,
-      comments: [],
-    },
-    {
-      id: "3",
-      title: "Car crash",
-      isVerified: false,
-      timestamp: "26 minutes ago",
-      location: "",
-      distance: "500m away from you",
-      imageUrl: "https://i.i-sgcm.com/news/article_news/2020/23101_p1_s_5.jpg",
-      alertCount: 15,
-      commentCount: 4,
-      shareCount: 4,
-      userAlerted: false,
-      comments: [],
-    },
-  ])
+  // Load forum posts
+  useEffect(() => {
+    const loadPosts = async () => {
+      try {
+        const posts = await getForumPosts();
+        if (posts) {
+          setNewsItems(posts.map((post: SupabasePost) => ({
+            id: post.id.toString(),
+            title: post.title,
+            isVerified: post.isVerified,
+            timestamp: getRelativeTime(post.created_at),
+            location: post.location,
+            distance: "calculating...", // We'll update this later
+            imageUrl: post.image_url || "",
+            alertCount: post.alert_count,
+            commentCount: post.comment_count,
+            shareCount: post.share_count,
+            userAlerted: false, // We'll update this with user interactions
+            comments: post.comments?.map((comment: SupabaseComment) => ({
+              id: comment.id.toString(),
+              username: comment.username,
+              text: comment.text,
+              thumbsUp: comment.thumbs_up,
+              thumbsDown: comment.thumbs_down,
+              userLiked: false, // We'll update this with user interactions
+              userDisliked: false, // We'll update this with user interactions
+              replies: comment.replies?.map((reply: SupabaseReply) => ({
+                id: reply.id.toString(),
+                username: reply.username,
+                text: reply.text
+              })) || [],
+              showReplies: false
+            })) || []
+          })));
+        }
+      } catch (error) {
+        console.error('Error loading posts:', error);
+      }
+    };
+
+    loadPosts();
+  }, []);
 
   useEffect(() => {
     if (postId) {
@@ -170,58 +194,25 @@ const ForumScreen: React.FC = () => {
     setShowCommentInput(false)
   }
 
-  const handleSubmitReply = () => {
-    if (replyText.trim() && replyingTo && selectedPost) {
-      // TODO: Add backend integration to add reply
+  const handleAlert = async (id: string) => {
+    try {
+      await handleInteraction('temp-user-id', parseInt(id), null, 'alert');
       setNewsItems(
         newsItems.map((item) => {
-          if (item.id === selectedPost && item.comments) {
+          if (item.id === id && !item.userAlerted) {
             return {
               ...item,
-              comments: item.comments.map((comment) => {
-                if (comment.id === replyingTo) {
-                  const newReply = {
-                    id: `${comment.id}-${Date.now()}`, // Use timestamp for unique ID
-                    username: "You",
-                    text: replyText,
-                  }
-                  return {
-                    ...comment,
-                    replies: [newReply, ...comment.replies], // Add to beginning of array
-                    showReplies: true,
-                  }
-                }
-                return comment
-              }),
+              alertCount: item.alertCount + 1,
+              userAlerted: true,
             }
           }
           return item
         }),
       )
-
-      // Clear input and hide reply box
-      setReplyText("")
-      setReplyingTo(null)
-
-      // Make sure keyboard is dismissed
-      Keyboard.dismiss()
+    } catch (error) {
+      console.error('Error handling alert:', error);
+      Alert.alert('Error', 'Failed to update alert. Please try again.');
     }
-  }
-
-  const handleAlert = (id: string) => {
-    // TODO: Add backend integration to update alert count
-    setNewsItems(
-      newsItems.map((item) => {
-        if (item.id === id && !item.userAlerted) {
-          return {
-            ...item,
-            alertCount: item.alertCount + 1,
-            userAlerted: true,
-          }
-        }
-        return item
-      }),
-    )
   }
 
   const handleCommentPress = (id: string) => {
@@ -238,135 +229,203 @@ const ForumScreen: React.FC = () => {
     router.push("/map")
   }
 
-  const handleSharePress = (id: string) => {
+  const handleSharePress = async (id: string) => {
     setShowShareModal(true)
   }
 
-  const handleShareOption = (platform: string) => {
-    // TODO: Add sharing functionality
+  const handleShareOption = async (platform: string) => {
     setShowShareModal(false)
     if (selectedPost) {
-      setNewsItems(
-        newsItems.map((item) => {
-          if (item.id === selectedPost) {
-            return {
-              ...item,
-              shareCount: item.shareCount + 1,
+      try {
+        await handleInteraction('temp-user-id', parseInt(selectedPost), null, 'share');
+        
+        setNewsItems(
+          newsItems.map((item) => {
+            if (item.id === selectedPost) {
+              return {
+                ...item,
+                shareCount: item.shareCount + 1,
+              }
             }
-          }
-          return item
-        }),
-      )
+            return item
+          }),
+        )
+        Alert.alert(`Shared to ${platform}`)
+      } catch (error) {
+        console.error('Error handling share:', error);
+        Alert.alert('Error', 'Failed to update share count. Please try again.');
+      }
     }
-    Alert.alert(`Shared to ${platform}`)
   }
 
-  const handleSubmitComment = () => {
+  const handleSubmitComment = async () => {
     if (newComment.trim() && selectedPost) {
-      // Find the post and add the comment
+      try {
+        const comment = await addComment(parseInt(selectedPost), 'temp-user-id', 'You', newComment);
+        
+        setNewsItems(
+          newsItems.map((item) => {
+            if (item.id === selectedPost) {
+              const comments = item.comments || [];
+              const newCommentObj: Comment = {
+                id: comment.id.toString(),
+                username: 'You',
+                text: newComment,
+                thumbsUp: 0,
+                thumbsDown: 0,
+                replies: [],
+                showReplies: false,
+              }
+
+              return {
+                ...item,
+                commentCount: item.commentCount + 1,
+                comments: [...comments, newCommentObj],
+              }
+            }
+            return item
+          }),
+        )
+
+        // Clear input and hide comment box
+        setNewComment("")
+        setShowCommentInput(false)
+
+        // Make sure keyboard is dismissed
+        Keyboard.dismiss()
+      } catch (error) {
+        console.error('Error submitting comment:', error);
+        Alert.alert('Error', 'Failed to submit comment. Please try again.');
+      }
+    }
+  }
+
+  const handleSubmitReply = async () => {
+    if (replyText.trim() && replyingTo && selectedPost) {
+      try {
+        const reply = await addReply(parseInt(replyingTo), 'temp-user-id', 'You', replyText);
+
+        setNewsItems(
+          newsItems.map((item) => {
+            if (item.id === selectedPost && item.comments) {
+              return {
+                ...item,
+                comments: item.comments.map((comment) => {
+                  if (comment.id === replyingTo) {
+                    const newReply = {
+                      id: reply.id.toString(),
+                      username: 'You',
+                      text: replyText,
+                    }
+                    return {
+                      ...comment,
+                      replies: [newReply, ...comment.replies],
+                      showReplies: true,
+                    }
+                  }
+                  return comment
+                }),
+              }
+            }
+            return item
+          }),
+        )
+
+        // Clear input and hide reply box
+        setReplyText("")
+        setReplyingTo(null)
+
+        // Make sure keyboard is dismissed
+        Keyboard.dismiss()
+      } catch (error) {
+        console.error('Error submitting reply:', error);
+        Alert.alert('Error', 'Failed to submit reply. Please try again.');
+      }
+    }
+  }
+
+  const handleThumbsUp = async (commentId: string) => {
+    if (!selectedPost) return;
+
+    try {
+      await handleInteraction('temp-user-id', parseInt(selectedPost), parseInt(commentId), 'like');
+      
       setNewsItems(
         newsItems.map((item) => {
-          if (item.id === selectedPost) {
-            const comments = item.comments || []
-            const newCommentObj: Comment = {
-              id: `comment-${Date.now()}`,
-              username: "You",
-              text: newComment,
-              thumbsUp: 0,
-              thumbsDown: 0,
-              replies: [],
-              showReplies: false,
-            }
-
+          if (item.id === selectedPost && item.comments) {
             return {
               ...item,
-              commentCount: item.commentCount + 1,
-              comments: [...comments, newCommentObj],
+              comments: item.comments.map((comment) => {
+                if (comment.id === commentId) {
+                  if (comment.userDisliked) {
+                    return {
+                      ...comment,
+                      thumbsUp: comment.thumbsUp + 1,
+                      thumbsDown: comment.thumbsDown - 1,
+                      userLiked: true,
+                      userDisliked: false,
+                    }
+                  } else if (!comment.userLiked) {
+                    return {
+                      ...comment,
+                      thumbsUp: comment.thumbsUp + 1,
+                      userLiked: true,
+                    }
+                  }
+                }
+                return comment
+              }),
             }
           }
           return item
         }),
       )
-
-      // Clear input and hide comment box
-      setNewComment("")
-      setShowCommentInput(false)
-
-      // Make sure keyboard is dismissed
-      Keyboard.dismiss()
+    } catch (error) {
+      console.error('Error handling thumbs up:', error);
+      Alert.alert('Error', 'Failed to update like. Please try again.');
     }
   }
 
-  const handleThumbsUp = (commentId: string) => {
-    // TODO: Add backend integration for likes
-    if (!selectedPost) return
+  const handleThumbsDown = async (commentId: string) => {
+    if (!selectedPost) return;
 
-    setNewsItems(
-      newsItems.map((item) => {
-        if (item.id === selectedPost && item.comments) {
-          return {
-            ...item,
-            comments: item.comments.map((comment) => {
-              if (comment.id === commentId) {
-                if (comment.userDisliked) {
-                  return {
-                    ...comment,
-                    thumbsUp: comment.thumbsUp + 1,
-                    thumbsDown: comment.thumbsDown - 1,
-                    userLiked: true,
-                    userDisliked: false,
-                  }
-                } else if (!comment.userLiked) {
-                  return {
-                    ...comment,
-                    thumbsUp: comment.thumbsUp + 1,
-                    userLiked: true,
+    try {
+      await handleInteraction('temp-user-id', parseInt(selectedPost), parseInt(commentId), 'dislike');
+      
+      setNewsItems(
+        newsItems.map((item) => {
+          if (item.id === selectedPost && item.comments) {
+            return {
+              ...item,
+              comments: item.comments.map((comment) => {
+                if (comment.id === commentId) {
+                  if (comment.userLiked) {
+                    return {
+                      ...comment,
+                      thumbsDown: comment.thumbsDown + 1,
+                      thumbsUp: comment.thumbsUp - 1,
+                      userDisliked: true,
+                      userLiked: false,
+                    }
+                  } else if (!comment.userDisliked) {
+                    return {
+                      ...comment,
+                      thumbsDown: comment.thumbsDown + 1,
+                      userDisliked: true,
+                    }
                   }
                 }
-              }
-              return comment
-            }),
+                return comment
+              }),
+            }
           }
-        }
-        return item
-      }),
-    )
-  }
-
-  const handleThumbsDown = (commentId: string) => {
-    // TODO: Add backend integration for dislikes
-    if (!selectedPost) return
-
-    setNewsItems(
-      newsItems.map((item) => {
-        if (item.id === selectedPost && item.comments) {
-          return {
-            ...item,
-            comments: item.comments.map((comment) => {
-              if (comment.id === commentId) {
-                if (comment.userLiked) {
-                  return {
-                    ...comment,
-                    thumbsDown: comment.thumbsDown + 1,
-                    thumbsUp: comment.thumbsUp - 1,
-                    userDisliked: true,
-                    userLiked: false,
-                  }
-                } else if (!comment.userDisliked) {
-                  return {
-                    ...comment,
-                    thumbsDown: comment.thumbsDown + 1,
-                    userDisliked: true,
-                  }
-                }
-              }
-              return comment
-            }),
-          }
-        }
-        return item
-      }),
-    )
+          return item
+        }),
+      )
+    } catch (error) {
+      console.error('Error handling thumbs down:', error);
+      Alert.alert('Error', 'Failed to update dislike. Please try again.');
+    }
   }
 
   const toggleReplies = (commentId: string) => {
