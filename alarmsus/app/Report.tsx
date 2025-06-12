@@ -2,6 +2,7 @@
 
 import { Ionicons } from "@expo/vector-icons"
 import * as Location from "expo-location"
+import * as ImagePicker from "expo-image-picker"
 import { useRouter } from "expo-router"
 import type React from "react"
 import { useState } from "react"
@@ -39,21 +40,56 @@ const ReportScreen: React.FC = () => {
   const [showSubmissionSuccess, setShowSubmissionSuccess] = useState<boolean>(false)
   const [showLegalWarning, setShowLegalWarning] = useState<boolean>(false)
   const [uploadedImageUri, setUploadedImageUri] = useState<string | null>(null)
+  const [reportScore, setReportScore] = useState<number>(10)
 
-  const handleUploadImage = (): void => {
-    setShowImageModal(true)
+  const requestPermissions = async () => {
+    // Request camera permissions
+    const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync()
+    if (cameraStatus !== 'granted') {
+      Alert.alert('Permission needed', 'Camera permission is required to take photos')
+      return false
+    }
+
+    // Request media library permissions
+    const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (mediaStatus !== 'granted') {
+      Alert.alert('Permission needed', 'Media library permission is required to select photos')
+      return false
+    }
+
+    return true
   }
 
-  const handleImageOption = (option: "camera" | "files"): void => {
+  const handleImageOption = async (option: "camera" | "files"): Promise<void> => {
     setShowImageModal(false)
-    if (option === "camera") {
-      Alert.alert("Camera", "Camera functionality to be implemented")
-      // For demo purposes, set a placeholder image
-      setUploadedImageUri("https://via.placeholder.com/400x300/CCCCCC/FFFFFF?text=Camera+Photo")
-    } else {
-      Alert.alert("Files", "File picker functionality to be implemented")
-      // For demo purposes, set a placeholder image
-      setUploadedImageUri("https://via.placeholder.com/400x300/CCCCCC/FFFFFF?text=Uploaded+Image")
+
+    const hasPermissions = await requestPermissions()
+    if (!hasPermissions) return
+
+    try {
+      let result
+      if (option === "camera") {
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        })
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        })
+      }
+
+      if (!result.canceled) {
+        setUploadedImageUri(result.assets[0].uri)
+      }
+    } catch (error) {
+      console.error('Error picking image:', error)
+      Alert.alert('Error', 'Failed to capture/select image')
     }
   }
 
@@ -106,6 +142,10 @@ const ReportScreen: React.FC = () => {
   // Check if form can be submitted
   const isSubmitActive = legalAgreement && (!isEmergency || (isEmergency && hasSelectedService))
 
+  const handleUploadImage = (): void => {
+    setShowImageModal(true)
+  }
+
   const handleSubmit = async (): Promise<void> => {
     if (!legalAgreement) {
       setShowLegalWarning(true)
@@ -138,9 +178,34 @@ const ReportScreen: React.FC = () => {
         console.error('Geocoding error:', error);
       }
 
+      // Prepare report data for LLM analysis
+      const reportData = {
+        text: caption,
+        image_description: "Image uploaded by user", // You would need image analysis here
+        related_reports: [], // You would need to fetch related reports here
+      };
+
+      // Call the LLM analyzer
+      try {
+        const response = await fetch('/api/analyze-report', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(reportData),
+        });
+        
+        const result = await response.json();
+        setReportScore(result.urgency_score);
+      } catch (error) {
+        console.error('Error analyzing report:', error);
+        // Default to showing the report if analysis fails
+        setReportScore(10);
+      }
+
       // Submit report
       await submitIncidentReport({
-        title: caption.split('\n')[0] || 'Untitled Report', // Use first line as title
+        title: caption.split('\n')[0] || 'Untitled Report',
         caption,
         emergency_type,
         is_in_danger: isInDanger,
@@ -183,13 +248,31 @@ const ReportScreen: React.FC = () => {
 
         <View style={styles.successContainer}>
           <View style={styles.successIconContainer}>
-            <View style={styles.successIconCircle}>
-              <Ionicons name="checkmark" size={80} color="#000000" />
+            <View style={[
+              styles.successIconCircle,
+              reportScore < 3 && styles.warningIconCircle
+            ]}>
+              <Ionicons 
+                name={reportScore >= 3 ? "checkmark" : "warning"} 
+                size={80} 
+                color="#000000" 
+              />
             </View>
           </View>
 
-          <Text style={styles.submittedText}>Submitted</Text>
-          <Text style={styles.meantimeText}>In the meantime...</Text>
+          {reportScore >= 3 ? (
+            <>
+              <Text style={styles.submittedText}>Submitted</Text>
+              <Text style={styles.meantimeText}>In the meantime...</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.warningText}>Please do not submit fake reports.</Text>
+              <Text style={styles.warningSubText}>
+                Consequences are serious and this slows emergency responses.
+              </Text>
+            </>
+          )}
 
           <View style={styles.optionsGrid}>
             <TouchableOpacity
@@ -750,6 +833,15 @@ const styles = StyleSheet.create({
     color: "#666666",
     textAlign: "center",
     lineHeight: 18,
+  },
+  warningIconCircle: {
+    backgroundColor: '#FFD700', // Yellow for warning
+  },
+  warningSubText: {
+    fontSize: 16,
+    color: '#666666',
+    textAlign: 'center',
+    marginBottom: 32,
   },
 })
 
