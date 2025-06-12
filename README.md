@@ -53,7 +53,6 @@ AlarmSus is a cross-agency community-powered **emergency reporting app** designe
    ```bash
    git clone https://github.com/SanShaoQian/AlarmSus.git
    cd alarmsus
-   npm run start
    ```
 2. Install dependencies:
     ```bash
