@@ -18,7 +18,6 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native"
-import Footer from "../components/Footer"
 import { addComment, addReply, getForumPosts, handleInteraction } from "../backend/utils/supabaseClient"
 
 interface SupabaseReply {
@@ -819,8 +818,6 @@ const ForumScreen: React.FC = () => {
           </View>
         </TouchableOpacity>
       </Modal>
-
-      <Footer />
     </View>
   )
 }

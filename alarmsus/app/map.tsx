@@ -1,10 +1,10 @@
 "use client"
 
+import React from 'react';
 import { Ionicons } from "@expo/vector-icons"
 import { useState } from "react"
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native"
 import CustomMap from "../components/CustomMap"
-import Footer from "../components/Footer"
 
 type EmergencySituation = "health" | "security" | "fire" | "others" | null
 type EmergencyEquipment = "aed" | "firstaid" | "fireextinguisher" | null
@@ -187,7 +187,6 @@ export default function MapScreen() {
         {/* Map */}
         <CustomMap showAEDs={showAEDs} />
       </View>
-      <Footer />
     </View>
   )
 }

@@ -18,7 +18,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native"
-import Footer from "../components/Footer"
 import { submitIncidentReport } from "../backend/utils/supabaseClient"
 
 const { width: screenWidth } = Dimensions.get("window")
@@ -241,8 +240,6 @@ const ReportScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </View>
-
-        <Footer />
       </View>
     )
   }
@@ -420,8 +417,6 @@ const ReportScreen: React.FC = () => {
           </View>
         </TouchableOpacity>
       </Modal>
-
-      <Footer />
     </View>
   )
 }

@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
+import Constants from 'expo-constants';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:3000';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || '';
+const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || '';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Supabase URL and Anon Key are required. Please check your .env file and app.config.js');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -133,46 +138,30 @@ export const handleInteraction = async (
         interaction_type: interactionType
       });
 
-    // Update counts
+    // Update counts using rpc calls
     if (interactionType === 'alert') {
-      await supabase
-        .from('incident_reports')
-        .update({ alert_count: supabase.raw('alert_count - 1') })
-        .eq('id', reportId);
+      await supabase.rpc('decrement_alert_count', { report_id: reportId });
     } else if (interactionType === 'share') {
-      await supabase
-        .from('incident_reports')
-        .update({ share_count: supabase.raw('share_count - 1') })
-        .eq('id', reportId);
+      await supabase.rpc('decrement_share_count', { report_id: reportId });
     } else if (commentId) {
-      await supabase
-        .from('comments')
-        .update({
-          thumbs_up: supabase.raw(interactionType === 'like' ? 'thumbs_up - 1' : 'thumbs_up'),
-          thumbs_down: supabase.raw(interactionType === 'dislike' ? 'thumbs_down - 1' : 'thumbs_down')
-        })
-        .eq('id', commentId);
+      if (interactionType === 'like') {
+        await supabase.rpc('decrement_thumbs_up', { comment_id: commentId });
+      } else {
+        await supabase.rpc('decrement_thumbs_down', { comment_id: commentId });
+      }
     }
   } else if (!error) {
-    // Update counts
+    // Update counts using rpc calls
     if (interactionType === 'alert') {
-      await supabase
-        .from('incident_reports')
-        .update({ alert_count: supabase.raw('alert_count + 1') })
-        .eq('id', reportId);
+      await supabase.rpc('increment_alert_count', { report_id: reportId });
     } else if (interactionType === 'share') {
-      await supabase
-        .from('incident_reports')
-        .update({ share_count: supabase.raw('share_count + 1') })
-        .eq('id', reportId);
+      await supabase.rpc('increment_share_count', { report_id: reportId });
     } else if (commentId) {
-      await supabase
-        .from('comments')
-        .update({
-          thumbs_up: supabase.raw(interactionType === 'like' ? 'thumbs_up + 1' : 'thumbs_up'),
-          thumbs_down: supabase.raw(interactionType === 'dislike' ? 'thumbs_down + 1' : 'thumbs_down')
-        })
-        .eq('id', commentId);
+      if (interactionType === 'like') {
+        await supabase.rpc('increment_thumbs_up', { comment_id: commentId });
+      } else {
+        await supabase.rpc('increment_thumbs_down', { comment_id: commentId });
+      }
     }
   }
 };

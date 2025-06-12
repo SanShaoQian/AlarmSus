@@ -27,7 +27,7 @@ const Footer: React.FC<FooterProps> = ({ style }) => {
     { name: "Map", path: "/map", icon: "location-outline", label: "Map" },
     { name: "Forum", path: "/forum", icon: "book-outline", label: "Forum" },
     { name: "Report", path: "/Report", icon: "camera-outline", label: "Report" },
-    { name: "News", path: "/", icon: "newspaper-outline", label: "News" }, // Changed to '/' for index
+    { name: "News", path: "/", icon: "newspaper-outline", label: "News" },
     { name: "Account", path: "/account", icon: "person-outline", label: "Account" },
   ]
 

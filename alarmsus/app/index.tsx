@@ -13,7 +13,6 @@ import {
   View,
   type ViewStyle,
 } from "react-native"
-import Footer from "../components/Footer"
 import type { NewsItem } from "../types"
 
 interface Styles {
@@ -86,8 +85,6 @@ const IndexScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      <Footer />
     </View>
   )
 }
