@@ -178,14 +178,12 @@ const ReportScreen: React.FC = () => {
         console.error('Geocoding error:', error);
       }
 
-      // Prepare report data for LLM analysis
       const reportData = {
         text: caption,
-        image_description: "Image uploaded by user", // You would need image analysis here
-        related_reports: [], // You would need to fetch related reports here
+        image_description: "Image uploaded by user",
+        related_reports: [],
       };
 
-      // Call the LLM analyzer
       try {
         const response = await fetch('/api/analyze-report', {
           method: 'POST',
