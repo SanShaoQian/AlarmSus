@@ -5,7 +5,6 @@ import { useRouter } from "expo-router"
 import type React from "react"
 import { useState } from "react"
 import { Image, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native"
-import Footer from "../components/Footer"
 
 interface RedeemOption {
   id: string
@@ -165,8 +164,6 @@ const AccountScreen: React.FC = () => {
           </View>
         )}
       </ScrollView>
-s
-      <Footer />
     </View>
   )
 }

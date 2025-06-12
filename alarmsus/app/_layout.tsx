@@ -1,15 +1,17 @@
 "use client"
 
-import { Stack } from "expo-router"
+import { Tabs } from "expo-router"
 import { SafeAreaProvider } from "react-native-safe-area-context"
+import Footer from "../components/Footer"
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <Stack
+      <Tabs
         screenOptions={{
-          headerShown: false, // Hide the header for all screens
+          headerShown: false,
         }}
+        tabBar={() => <Footer />}
       />
     </SafeAreaProvider>
   )
